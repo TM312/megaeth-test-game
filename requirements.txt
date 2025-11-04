@@ -1,0 +1,10 @@
+# Terminal Snake Game Requirements
+# Python 3.x is required
+# curses library is included with Python on most Unix systems
+
+web3==7.14.0
+eth-account==0.13.7
+python-dotenv==1.2.1
+pytest==8.4.2
+pytest-mock==3.15.1
+pytest-cov==7.0.0
