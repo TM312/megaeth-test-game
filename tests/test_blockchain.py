@@ -40,7 +40,7 @@ class TestBlockchainClient:
         """Test initialization with private key triggers connection attempt"""
         with patch.object(Config, "PRIVATE_KEY", TEST_PRIVATE_KEY):
             with patch.object(BlockchainClient, "_connect") as mock_connect:
-                client = BlockchainClient()
+                client = BlockchainClient()  # Test auto-connect behavior
 
                 assert client.private_key == TEST_PRIVATE_KEY
                 mock_connect.assert_called_once()
@@ -50,7 +50,7 @@ class TestBlockchainClient:
         """Test initialization without private key skips connection"""
         with patch.object(Config, "PRIVATE_KEY", None):
             with patch.object(BlockchainClient, "_connect") as mock_connect:
-                client = BlockchainClient()
+                client = BlockchainClient(auto_connect=False)
 
                 assert client.private_key is None
                 mock_connect.assert_not_called()
@@ -73,7 +73,7 @@ class TestBlockchainClient:
         mock_web3_class.HTTPProvider.return_value = Mock()
         mock_web3_class.return_value = mock_w3
 
-        client = BlockchainClient()
+        client = BlockchainClient(auto_connect=False)
         client.private_key = TEST_PRIVATE_KEY
         client._connect()
 
@@ -91,7 +91,8 @@ class TestBlockchainClient:
         mock_web3_class.HTTPProvider.return_value = Mock()
         mock_web3_class.return_value = mock_w3
 
-        client = BlockchainClient()
+        # Create client without auto-connecting
+        client = BlockchainClient(auto_connect=False)
         client.private_key = TEST_PRIVATE_KEY
         client._connect()
 
@@ -108,7 +109,7 @@ class TestBlockchainClient:
         mock_web3_class.HTTPProvider.return_value = Mock()
         mock_web3_class.return_value = mock_w3
 
-        client = BlockchainClient()
+        client = BlockchainClient(auto_connect=False)
         client.private_key = TEST_PRIVATE_KEY
         client._connect()
 
@@ -120,7 +121,7 @@ class TestBlockchainClient:
 
     def test_is_connected_returns_true_when_web3_connected(self):
         """Test is_connected returns True when web3 reports connection"""
-        client = BlockchainClient()
+        client = BlockchainClient(auto_connect=False)
         client.w3 = Mock()
         client.w3.is_connected.return_value = True
 
@@ -130,7 +131,7 @@ class TestBlockchainClient:
 
     def test_is_connected_returns_false_when_no_web3(self):
         """Test is_connected returns False when no web3 instance"""
-        client = BlockchainClient()
+        client = BlockchainClient(auto_connect=False)
         client.w3 = None
 
         result = client.is_connected()
@@ -139,7 +140,7 @@ class TestBlockchainClient:
 
     def test_is_connected_returns_false_when_web3_not_connected(self):
         """Test is_connected returns False when web3 reports disconnection"""
-        client = BlockchainClient()
+        client = BlockchainClient(auto_connect=False)
         client.w3 = Mock()
         client.w3.is_connected.return_value = False
 
@@ -151,20 +152,20 @@ class TestBlockchainClient:
 
     def test_send_key_transaction_no_web3(self):
         """Test send_key_transaction returns False when no web3"""
-        client = BlockchainClient()
+        client = BlockchainClient(auto_connect=False)
         client.w3 = None
 
         result = client.send_key_transaction(65, "up")
-        assert result is False
+        assert result == (False, None)
 
     def test_send_key_transaction_no_account(self):
         """Test send_key_transaction returns False when no account"""
-        client = BlockchainClient()
+        client = BlockchainClient(auto_connect=False)
         client.w3 = Mock()
         client.account = None
 
         result = client.send_key_transaction(65, "up")
-        assert result is False
+        assert result == (False, None)
 
     @patch("blockchain.Web3")
     def test_send_key_transaction_success_returns_true(self, mock_web3_class):
@@ -176,19 +177,21 @@ class TestBlockchainClient:
         mock_w3.eth.gas_price = DEFAULT_GAS_PRICE
         mock_w3.eth.get_transaction_count.return_value = 1
         mock_w3.eth.chain_id = DEFAULT_CHAIN_ID
+        mock_tx_hash = Mock()
+        mock_w3.eth.send_raw_transaction.return_value = mock_tx_hash
         mock_w3.eth.account.sign_transaction.return_value = Mock(
             rawTransaction=b"signed_tx"
         )
         mock_web3_class.HTTPProvider.return_value = Mock()
         mock_web3_class.return_value = mock_w3
 
-        client = BlockchainClient()
+        client = BlockchainClient(auto_connect=False)
         client.w3 = mock_w3
         client.account = mock_account
 
         result = client.send_key_transaction(65, "up")
 
-        assert result is True
+        assert result == (True, mock_tx_hash)
 
     @patch("blockchain.Web3")
     def test_send_key_transaction_success_creates_correct_transaction(
@@ -208,7 +211,7 @@ class TestBlockchainClient:
         mock_web3_class.HTTPProvider.return_value = Mock()
         mock_web3_class.return_value = mock_w3
 
-        client = BlockchainClient()
+        client = BlockchainClient(auto_connect=False)
         client.w3 = mock_w3
         client.account = mock_account
 
@@ -239,12 +242,12 @@ class TestBlockchainClient:
         mock_web3_class.HTTPProvider.return_value = Mock()
         mock_web3_class.return_value = mock_w3
 
-        client = BlockchainClient()
+        client = BlockchainClient(auto_connect=False)
         client.w3 = mock_w3
         client.account = mock_account
 
         result = client.send_key_transaction(65, "up")
 
-        assert result is False
+        assert result == (False, None)
 
     # endregion

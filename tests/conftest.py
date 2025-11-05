@@ -4,7 +4,7 @@ Test configuration and fixtures
 
 import pytest
 from unittest.mock import Mock
-from game import SnakeGame
+from snake.game import SnakeGame  # noqa: F401
 
 # Lazy import for blockchain client to handle missing dependencies
 try:
@@ -26,7 +26,7 @@ def mock_blockchain_client():
         pytest.skip("Blockchain dependencies not available")
     client = Mock(spec=BlockchainClient)
     client.is_connected.return_value = True
-    client.send_key_transaction.return_value = True
+    client.send_key_transaction.return_value = (True, b"mock_tx_hash")
     return client
 
 
@@ -37,7 +37,7 @@ def mock_blockchain_client_disconnected():
         pytest.skip("Blockchain dependencies not available")
     client = Mock(spec=BlockchainClient)
     client.is_connected.return_value = False
-    client.send_key_transaction.return_value = False
+    client.send_key_transaction.return_value = (False, None)
     return client
 
 
@@ -48,7 +48,7 @@ def mock_blockchain_client_failing():
         pytest.skip("Blockchain dependencies not available")
     client = Mock(spec=BlockchainClient)
     client.is_connected.return_value = True
-    client.send_key_transaction.return_value = False
+    client.send_key_transaction.return_value = (False, None)
     return client
 
 

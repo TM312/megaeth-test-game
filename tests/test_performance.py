@@ -7,7 +7,10 @@ from unittest.mock import Mock
 
 import pytest
 
-from game import SnakeGame, FoodManager, GameRenderer, InputHandler
+from snake.game import SnakeGame
+from snake.food_manager import FoodManager
+from snake.game_renderer import GameRenderer
+from snake.input_handler import InputHandler
 
 
 class TestPerformance:

@@ -19,13 +19,13 @@ DEFAULT_GAS_LIMIT = 21000
 class BlockchainClient:
     """Client for interacting with MegaETH testnet"""
 
-    def __init__(self):
+    def __init__(self, auto_connect=True):
         self.w3: Optional[Web3] = None
         self.account = None
         self.private_key = Config.PRIVATE_KEY
         self.rpc_url = Config.RPC_URL
 
-        if self.private_key:
+        if self.private_key and auto_connect:
             self._connect()
 
     def _connect(self):
@@ -46,10 +46,16 @@ class BlockchainClient:
             print(f"Failed to connect to MegaETH testnet: {e}")
             self.w3 = None
 
-    def send_key_transaction(self, key_code: int, direction: str = "") -> bool:
-        """Send a transaction representing a key event"""
+    def send_key_transaction(
+        self, key_code: int, direction: str = ""
+    ) -> tuple[bool, Optional[bytes]]:
+        """Send a transaction representing a key event
+
+        Returns:
+            tuple: (success: bool, tx_hash: bytes or None)
+        """
         if not self.w3 or not self.account:
-            return False
+            return False, None
 
         try:
             transaction = self._build_transaction(key_code, direction)
@@ -57,11 +63,11 @@ class BlockchainClient:
             tx_hash = self._send_transaction(signed_transaction)
 
             self._log_transaction(tx_hash)
-            return True
+            return True, tx_hash
 
         except Exception as e:
             self._handle_transaction_error(e)
-            return False
+            return False, None
 
     def _build_transaction(self, key_code: int, direction: str) -> dict:
         """Build transaction dictionary"""

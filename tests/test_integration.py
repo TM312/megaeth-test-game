@@ -5,7 +5,7 @@ Integration tests for Snake game components
 import pytest
 from unittest.mock import Mock, patch
 import curses
-from game import SnakeGame
+from snake.game import SnakeGame
 
 # Lazy import for blockchain client
 try:
@@ -39,7 +39,9 @@ class TestIntegration:
         mock_web3_class.return_value = mock_w3
 
         # Create game with blockchain
-        game = SnakeGame(width=5, height=5, blockchain_client=BlockchainClient())
+        game = SnakeGame(
+            width=5, height=5, blockchain_client=BlockchainClient(auto_connect=False)
+        )
 
         # Verify blockchain is enabled
         assert game.blockchain_enabled is True
@@ -179,7 +181,7 @@ class TestIntegration:
         mock_web3_class.return_value = mock_w3
 
         # Create game - blockchain is enabled even with failed connection
-        game = SnakeGame(blockchain_client=BlockchainClient())
+        game = SnakeGame(blockchain_client=BlockchainClient(auto_connect=False))
 
         # Game should still work - blockchain is enabled but transactions may fail
         assert game.blockchain_enabled is True

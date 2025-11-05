@@ -46,6 +46,24 @@ make clean    # Clean up files
 - curses (Unix systems)
 - web3.py, python-dotenv
 
+## Project Structure
+
+```
+snake/
+├── snake/                 # Game package
+│   ├── __init__.py       # Package exports
+│   ├── constants.py      # Game constants and configuration
+│   ├── data_structures.py # Position and DirectionInfo classes
+│   ├── food_manager.py   # Food generation logic
+│   ├── game_renderer.py  # Rendering and UI system
+│   ├── input_handler.py  # Input processing and blockchain
+│   ├── game.py          # Core SnakeGame class
+│   └── transaction_tracker.py # Transaction recording
+├── main.py               # Application entry point
+├── tests/                # Test suite
+└── scripts/              # Utility scripts
+```
+
 ## Features
 
 - Terminal-based Snake game

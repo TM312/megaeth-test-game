@@ -5,9 +5,8 @@ Tests for SnakeGame
 import curses
 from unittest.mock import Mock, patch
 
-import pytest
-
-from game import SnakeGame
+from snake.game import SnakeGame
+from snake.game_renderer import GameRenderer
 
 
 # Test constants
@@ -109,6 +108,8 @@ class TestSnakeGame:
             (CENTER_X, CENTER_Y + 1),
         ]  # Snake at center, moving up
         game.direction = (0, -1)
+        # Set food to a position that won't be eaten
+        game.food = (0, 0)
 
         game.update()
 
@@ -420,3 +421,267 @@ class TestComprehensiveEdgeCases:
             # Random positions should not collide
             assert not game._check_self_collision((-1, -1))
             assert not game._check_self_collision((99, 99))
+
+
+# ============================================================================
+# Renderer Tests
+# ============================================================================
+
+
+class MockStdscr:
+    """Mock curses window for testing"""
+
+    def __init__(self, max_y=24, max_x=80):
+        self.max_y = max_y
+        self.max_x = max_x
+        self.chars_added = []
+        self.strs_added = []
+        self.cleared = False
+        self.refreshed = False
+
+    def clear(self):
+        self.cleared = True
+
+    def addch(self, y, x, ch, *args):
+        """Will raise error if out of bounds like real curses"""
+        if y < 0 or y >= self.max_y or x < 0 or x >= self.max_x:
+            raise curses.error("addch() out of bounds")
+        self.chars_added.append((y, x, ch))
+
+    def addstr(self, y, x, s, *args):
+        """Will raise error if out of bounds like real curses"""
+        if y < 0 or y >= self.max_y or x < 0 or x >= self.max_x:
+            raise curses.error("addstr() out of bounds")
+        self.strs_added.append((y, x, s))
+
+    def refresh(self):
+        self.refreshed = True
+
+    def getmaxyx(self):
+        return (self.max_y, self.max_x)
+
+
+class TestGameRenderer:
+    """Test suite for GameRenderer"""
+
+    def test_renderer_initialization(self):
+        """Test renderer initializes with correct dimensions"""
+
+        renderer = GameRenderer(width=20, height=15)
+
+        assert renderer.width == 20
+        assert renderer.height == 15
+
+    def test_safe_addch_within_bounds(self):
+        """Test _safe_addch succeeds when within bounds"""
+
+        renderer = GameRenderer(width=20, height=15)
+        mock_stdscr = MockStdscr(max_y=25, max_x=80)
+
+        result = renderer._safe_addch(mock_stdscr, 5, 10, "X")
+
+        assert result is True
+        assert (5, 10, "X") in mock_stdscr.chars_added
+
+    def test_safe_addch_out_of_bounds(self):
+        """Test _safe_addch fails gracefully when out of bounds"""
+
+        renderer = GameRenderer(width=20, height=15)
+        mock_stdscr = MockStdscr(max_y=25, max_x=80)
+
+        result = renderer._safe_addch(mock_stdscr, 30, 10, "X")
+
+        assert result is False
+        assert len(mock_stdscr.chars_added) == 0
+
+    def test_safe_addch_negative_coordinates(self):
+        """Test _safe_addch fails gracefully with negative coordinates"""
+
+        renderer = GameRenderer(width=20, height=15)
+        mock_stdscr = MockStdscr(max_y=25, max_x=80)
+
+        result = renderer._safe_addch(mock_stdscr, -1, 10, "X")
+
+        assert result is False
+        assert len(mock_stdscr.chars_added) == 0
+
+    def test_safe_addstr_within_bounds(self):
+        """Test _safe_addstr succeeds when within bounds"""
+
+        renderer = GameRenderer(width=20, height=15)
+        mock_stdscr = MockStdscr(max_y=25, max_x=80)
+
+        result = renderer._safe_addstr(mock_stdscr, 2, 10, "Score: 42")
+
+        assert result is True
+        assert (2, 10, "Score: 42") in mock_stdscr.strs_added
+
+    def test_safe_addstr_out_of_bounds(self):
+        """Test _safe_addstr fails gracefully when out of bounds"""
+
+        renderer = GameRenderer(width=20, height=15)
+        mock_stdscr = MockStdscr(max_y=25, max_x=80)
+
+        result = renderer._safe_addstr(mock_stdscr, 30, 10, "Score: 42")
+
+        assert result is False
+        assert len(mock_stdscr.strs_added) == 0
+
+    def test_safe_addstr_truncates_overflow(self):
+        """Test _safe_addstr truncates text that would overflow"""
+
+        renderer = GameRenderer(width=20, height=15)
+        mock_stdscr = MockStdscr(max_y=25, max_x=20)  # Only 20 columns
+
+        # Text would overflow at position 15 with 20 char text
+        result = renderer._safe_addstr(mock_stdscr, 0, 15, "This is very long text")
+
+        assert result is True
+        # Should truncate to fit in remaining space (20 - 15 - 1 = 4 chars)
+        assert len(mock_stdscr.strs_added) == 1
+
+    def test_draw_game_with_small_terminal(self):
+        """Test game renders correctly with small terminal"""
+
+        renderer = GameRenderer(width=20, height=15)
+        game = SnakeGame(width=20, height=15)
+        mock_stdscr = MockStdscr(max_y=20, max_x=40)
+
+        # Don't call init_colors for testing - use monochrome mode
+        renderer.draw_game(mock_stdscr, game)
+
+        assert mock_stdscr.cleared
+        assert mock_stdscr.refreshed
+        assert len(mock_stdscr.chars_added) > 0  # Borders and snake
+
+    def test_draw_game_with_large_terminal(self):
+        """Test game renders correctly with large terminal"""
+
+        renderer = GameRenderer(width=20, height=15)
+        game = SnakeGame(width=20, height=15)
+        mock_stdscr = MockStdscr(max_y=100, max_x=200)
+
+        # Don't call init_colors for testing - use monochrome mode
+        renderer.draw_game(mock_stdscr, game)
+
+        assert mock_stdscr.cleared
+        assert mock_stdscr.refreshed
+        assert len(mock_stdscr.chars_added) > 0
+
+    def test_draw_borders_clips_to_terminal_width(self):
+        """Test borders are clipped to terminal width"""
+
+        renderer = GameRenderer(width=20, height=15)
+        mock_stdscr = MockStdscr(max_y=25, max_x=15)  # Narrower than game
+
+        renderer._draw_borders(mock_stdscr)
+
+        # Should not attempt to draw outside bounds
+        for y, x, ch in mock_stdscr.chars_added:
+            assert 0 <= x < 15, f"Character at x={x} is out of bounds"
+            assert 0 <= y < 25, f"Character at y={y} is out of bounds"
+
+    def test_draw_borders_clips_to_terminal_height(self):
+        """Test borders are clipped to terminal height"""
+
+        renderer = GameRenderer(width=20, height=15)
+        mock_stdscr = MockStdscr(max_y=10, max_x=80)  # Shorter than game
+
+        renderer._draw_borders(mock_stdscr)
+
+        # Should not attempt to draw outside bounds
+        for y, x, ch in mock_stdscr.chars_added:
+            assert 0 <= y < 10, f"Character at y={y} is out of bounds"
+            assert 0 <= x < 80, f"Character at x={x} is out of bounds"
+
+    def test_draw_score_handles_small_terminal(self):
+        """Test score display doesn't fail on small terminal"""
+
+        renderer = GameRenderer(width=20, height=15)
+        game = SnakeGame(width=20, height=15)
+        game.score = 999
+        mock_stdscr = MockStdscr(max_y=10, max_x=30)  # Limited space
+
+        # Should not raise exception
+        renderer._draw_score(mock_stdscr, game.score)
+
+    def test_draw_blockchain_status_handles_small_terminal(self):
+        """Test blockchain status display doesn't fail on small terminal"""
+
+        renderer = GameRenderer(width=20, height=15)
+        mock_stdscr = MockStdscr(max_y=10, max_x=30)
+
+        # Should not raise exception
+        renderer._draw_blockchain_status(mock_stdscr, True)
+        renderer._draw_blockchain_status(mock_stdscr, False)
+
+    def test_draw_game_over_handles_small_terminal(self):
+        """Test game over message doesn't fail on small terminal"""
+
+        renderer = GameRenderer(width=20, height=15)
+        mock_stdscr = MockStdscr(max_y=10, max_x=30)
+
+        # Should not raise exception
+        renderer._draw_game_over(mock_stdscr, True, 15)
+
+    def test_draw_game_handles_renderer_exception(self):
+        """Test draw_game handles exceptions gracefully"""
+
+        renderer = GameRenderer(width=20, height=15)
+        game = SnakeGame(width=20, height=15)
+
+        class FailingStdscr(MockStdscr):
+            def clear(self):
+                self.cleared = True
+
+            def refresh(self):
+                raise Exception("Refresh failed")
+
+        mock_stdscr = FailingStdscr()
+
+        # Should not raise exception even when refresh fails
+        renderer.draw_game(mock_stdscr, game)
+
+    def test_full_game_render_loop(self):
+        """Test a complete game render loop with various game states"""
+
+        renderer = GameRenderer(width=20, height=15)
+        game = SnakeGame(width=20, height=15)
+        mock_stdscr = MockStdscr(max_y=25, max_x=80)
+
+        # Render multiple frames
+        for i in range(5):
+            game.update()
+            # Don't call init_colors for testing - use monochrome mode
+            renderer.draw_game(mock_stdscr, game)
+
+        assert mock_stdscr.cleared
+        assert mock_stdscr.refreshed
+        assert len(mock_stdscr.chars_added) > 0
+
+    def test_snake_rendering_with_various_lengths(self):
+        """Test rendering snakes of various lengths"""
+
+        renderer = GameRenderer(width=20, height=15)
+        mock_stdscr = MockStdscr(max_y=25, max_x=80)
+
+        # Test with growing snake - keep within game bounds
+        for length in [1, 5, 10]:
+            game = SnakeGame(width=20, height=15)
+            # Create snake of specific length, positioned safely in center
+            game.snake = [(10 - i, 7) for i in range(length)]
+
+            mock_stdscr.chars_added.clear()
+            renderer._draw_snake(mock_stdscr, game.snake)
+
+            # All snake segments within bounds should be drawn
+            drawn_count = sum(
+                1 for y, x, ch in mock_stdscr.chars_added if ch in ["█", "●"]
+            )
+            # At least some segments should be drawn
+            assert drawn_count > 0, f"No snake segments drawn for length {length}"
+            # All drawn segments should have valid coordinates
+            for y, x, ch in mock_stdscr.chars_added:
+                if ch in ["█", "●"]:
+                    assert 0 <= x < 80
+                    assert 0 <= y < 25
