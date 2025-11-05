@@ -1,8 +1,8 @@
 """
-Game constants and configuration values
+Game constants and configuration values for the Pygame renderer
 """
 
-import curses
+import pygame
 
 # ============================================================================
 # Game Grid Dimensions
@@ -10,27 +10,33 @@ import curses
 
 GRID_WIDTH = 20
 GRID_HEIGHT = 15
-GAME_SPEED_MS = 150
+GAME_SPEED_MS = 150  # milliseconds between updates
 
 # ============================================================================
-# UI Constants
+# Rendering Constants (Pygame)
 # ============================================================================
 
-BORDER_OFFSET = 1
-SCORE_PANEL_OFFSET = 4
-STATUS_PANEL_Y = 1
+# Size of one logical cell in pixels
+CELL_SIZE = 24
+
+# Window padding around the playfield (in pixels)
+WINDOW_PADDING = 16
+
+# Border thickness (in pixels)
+BORDER_THICKNESS = 2
 
 # ============================================================================
-# Color Constants
+# Color Constants (RGB tuples)
 # ============================================================================
 
-COLOR_SNAKE_HEAD = 1
-COLOR_SNAKE_BODY = 2
-COLOR_FOOD = 3
-COLOR_BORDER = 4
-COLOR_SCORE = 5
-COLOR_GAME_OVER = 6
-COLOR_BACKGROUND = 7
+COLOR_SNAKE_HEAD = (255, 215, 0)  # gold
+COLOR_SNAKE_BODY = (40, 200, 40)  # green
+COLOR_FOOD = (220, 20, 60)  # crimson
+COLOR_BORDER = (200, 200, 200)  # light gray
+COLOR_SCORE = (0, 200, 255)  # cyan-ish
+COLOR_GAME_OVER_TEXT = (220, 50, 50)
+COLOR_GAME_OVER_BG = (230, 230, 230)
+COLOR_BACKGROUND = (0, 0, 0)  # black
 
 # ============================================================================
 # Direction Constants
@@ -41,12 +47,12 @@ DIRECTION_DOWN = (0, 1)
 DIRECTION_LEFT = (-1, 0)
 DIRECTION_RIGHT = (1, 0)
 
-# Direction mappings for key presses
+# Direction mappings for key presses (Pygame key constants)
 DIRECTION_KEYS = {
-    curses.KEY_UP: DIRECTION_UP,
-    curses.KEY_DOWN: DIRECTION_DOWN,
-    curses.KEY_LEFT: DIRECTION_LEFT,
-    curses.KEY_RIGHT: DIRECTION_RIGHT,
+    pygame.K_UP: DIRECTION_UP,
+    pygame.K_DOWN: DIRECTION_DOWN,
+    pygame.K_LEFT: DIRECTION_LEFT,
+    pygame.K_RIGHT: DIRECTION_RIGHT,
 }
 
 # Opposite directions for validation (prevent immediate reversal)

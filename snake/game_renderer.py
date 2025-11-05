@@ -1,273 +1,196 @@
 """
-Game rendering system for the Snake game
+Game rendering system for the Snake game (Pygame implementation)
 """
 
-import curses
 import logging
 from typing import List, Tuple
 
+import pygame
+
 from .constants import (
-    BORDER_OFFSET,
-    SCORE_PANEL_OFFSET,
-    STATUS_PANEL_Y,
+    CELL_SIZE,
+    WINDOW_PADDING,
+    BORDER_THICKNESS,
     COLOR_SNAKE_HEAD,
     COLOR_SNAKE_BODY,
     COLOR_FOOD,
     COLOR_BORDER,
     COLOR_SCORE,
-    COLOR_GAME_OVER,
+    COLOR_GAME_OVER_TEXT,
+    COLOR_GAME_OVER_BG,
+    COLOR_BACKGROUND,
 )
 
 logger = logging.getLogger(__name__)
 
 
 class GameRenderer:
-    """Handles all game rendering and UI display"""
+    """Handles all game rendering and UI display using Pygame"""
 
     def __init__(self, width: int, height: int):
         self.width = width
         self.height = height
 
-    def init_colors(self, stdscr):
-        """Initialize color pairs if terminal supports colors"""
-        try:
-            if curses.has_colors():
-                curses.start_color()
+        self.cell_size = CELL_SIZE
+        self.padding = WINDOW_PADDING
+        self.border_thickness = BORDER_THICKNESS
 
-                # Define color pairs
-                curses.init_pair(
-                    COLOR_SNAKE_HEAD, curses.COLOR_YELLOW, curses.COLOR_BLACK
-                )
-                curses.init_pair(
-                    COLOR_SNAKE_BODY, curses.COLOR_GREEN, curses.COLOR_BLACK
-                )
-                curses.init_pair(COLOR_FOOD, curses.COLOR_RED, curses.COLOR_BLACK)
-                curses.init_pair(COLOR_BORDER, curses.COLOR_WHITE, curses.COLOR_BLACK)
-                curses.init_pair(COLOR_SCORE, curses.COLOR_CYAN, curses.COLOR_BLACK)
-                curses.init_pair(COLOR_GAME_OVER, curses.COLOR_RED, curses.COLOR_WHITE)
-                curses.init_pair(
-                    COLOR_BACKGROUND, curses.COLOR_BLACK, curses.COLOR_BLACK
-                )
+        self.screen = None
+        self.font_small = None
+        self.font_large = None
 
-                # Set background color
-                stdscr.bkgd(" ", curses.color_pair(COLOR_BACKGROUND))
-        except Exception:
-            # Colors not supported or curses not initialized - continue without colors
-            pass
+    # ---------------------------------------------------------------------
+    # Initialization
+    # ---------------------------------------------------------------------
+    def init_window(self):
+        """Initialize Pygame display and fonts; return window surface."""
+        pygame.init()
+        pygame.font.init()
 
-    def _safe_addch_colored(
-        self, stdscr, y: int, x: int, char, color_pair: int
-    ) -> bool:
-        """Safely add a colored character at position"""
-        try:
-            max_y, max_x = stdscr.getmaxyx()
-            if 0 <= y < max_y and 0 <= x < max_x:
-                # Try colored version first, fallback to monochrome
-                try:
-                    if curses.has_colors():
-                        stdscr.addch(y, x, char, curses.color_pair(color_pair))
-                    else:
-                        stdscr.addch(y, x, char)
-                except Exception:
-                    # Fallback to monochrome if color fails
-                    stdscr.addch(y, x, char)
-                return True
-            return False
-        except Exception:
-            return False
+        playfield_w = self.width * self.cell_size
+        playfield_h = self.height * self.cell_size
 
-    def _safe_addstr_colored(
-        self, stdscr, y: int, x: int, text: str, color_pair: int
-    ) -> bool:
-        """Safely add a colored string at position"""
-        try:
-            max_y, max_x = stdscr.getmaxyx()
-            if 0 <= y < max_y and 0 <= x < max_x:
-                # Truncate text if it would exceed right boundary
-                available_space = max_x - x
-                if len(text) > available_space:
-                    text = text[: available_space - 1]
-                # Try colored version first, fallback to monochrome
-                try:
-                    if curses.has_colors():
-                        stdscr.addstr(y, x, text, curses.color_pair(color_pair))
-                    else:
-                        stdscr.addstr(y, x, text)
-                except Exception:
-                    # Fallback to monochrome if color fails
-                    stdscr.addstr(y, x, text)
-                return True
-            return False
-        except Exception:
-            return False
+        # Reserve top area for score/status (approx 40px)
+        hud_height = 40
 
-    def draw_game(self, stdscr, game_state):
-        """Draw the complete game state"""
-        try:
-            stdscr.clear()
-            self._draw_borders(stdscr)
-            self._draw_snake(stdscr, game_state.snake)
-            self._draw_food(stdscr, game_state.food)
-            self._draw_score(stdscr, game_state.score)
-            self._draw_blockchain_status(stdscr, game_state.blockchain_enabled)
-            self._draw_game_over(stdscr, game_state.game_over, self.height)
-            stdscr.refresh()
-        except Exception as e:
-            logger.error(f"Render error: {e}", exc_info=True)
-            # Handle curses errors gracefully
-            try:
-                stdscr.clear()
-                error_msg = f"Render error: {str(e)[:40]}"
-                self._safe_addstr(stdscr, 0, 0, error_msg)
-                stdscr.refresh()
-            except Exception as err:
-                logger.error(f"Failed to display error message: {err}", exc_info=True)
-                pass  # Silently fail if we can't even display error
+        window_w = self.padding * 2 + playfield_w + self.border_thickness * 2
+        window_h = (
+            self.padding * 2 + hud_height + playfield_h + self.border_thickness * 2
+        )
 
-    def _safe_addch(self, stdscr, y: int, x: int, char) -> bool:
-        """Safely add a character at position, checking bounds first"""
-        try:
-            max_y, max_x = stdscr.getmaxyx()
-            if 0 <= y < max_y and 0 <= x < max_x:
-                stdscr.addch(y, x, char)
-                return True
-            else:
-                pass  # Out of bounds - silently skip
-                return False
-        except Exception as e:
-            logger.warning(f"_safe_addch failed: {e}")
-            return False
+        self.screen = pygame.display.set_mode((window_w, window_h))
+        pygame.display.set_caption("Snake (Pygame)")
 
-    def _safe_addstr(self, stdscr, y: int, x: int, text: str) -> bool:
-        """Safely add a string at position, checking bounds first"""
-        try:
-            max_y, max_x = stdscr.getmaxyx()
-            if 0 <= y < max_y and 0 <= x < max_x:
-                # Truncate text if it would exceed right boundary
-                available_space = max_x - x
-                if len(text) > available_space:
-                    text = text[: available_space - 1]
-                stdscr.addstr(y, x, text)
-                return True
-            else:
-                pass  # Out of bounds - silently skip
-                return False
-        except Exception as e:
-            logger.warning(f"_safe_addstr failed: {e}")
-            return False
+        # Use default fonts for portability
+        self.font_small = pygame.font.SysFont(None, 22)
+        self.font_large = pygame.font.SysFont(None, 36)
 
-    def _draw_borders(self, stdscr):
-        """Draw game borders"""
-        try:
-            max_y, max_x = stdscr.getmaxyx()
+        return self.screen
 
-            # Horizontal borders - use double lines for better appearance
-            for x in range(min(self.width + 2, max_x)):
-                self._safe_addch_colored(stdscr, 0, x, "═", COLOR_BORDER)
-                if self.height + 1 < max_y:
-                    self._safe_addch_colored(
-                        stdscr, self.height + 1, x, "═", COLOR_BORDER
-                    )
+    # ---------------------------------------------------------------------
+    # Drawing helpers
+    # ---------------------------------------------------------------------
+    def _playfield_origin(self) -> Tuple[int, int]:
+        """Top-left (x,y) pixel position of the playfield (inside border)."""
+        hud_height = 40
+        x0 = self.padding + self.border_thickness
+        y0 = self.padding + hud_height + self.border_thickness
+        return x0, y0
 
-            # Vertical borders
-            for y in range(min(self.height + 2, max_y)):
-                self._safe_addch_colored(stdscr, y, 0, "║", COLOR_BORDER)
-                if self.width + 1 < max_x:
-                    self._safe_addch_colored(
-                        stdscr, y, self.width + 1, "║", COLOR_BORDER
-                    )
+    def _playfield_rect(self) -> pygame.Rect:
+        x0, y0 = self._playfield_origin()
+        return pygame.Rect(
+            x0 - self.border_thickness,
+            y0 - self.border_thickness,
+            self.width * self.cell_size + self.border_thickness * 2,
+            self.height * self.cell_size + self.border_thickness * 2,
+        )
 
-            # Corner pieces
-            if self.width + 1 < max_x and self.height + 1 < max_y:
-                self._safe_addch_colored(stdscr, 0, 0, "╔", COLOR_BORDER)
-                self._safe_addch_colored(stdscr, 0, self.width + 1, "╗", COLOR_BORDER)
-                self._safe_addch_colored(stdscr, self.height + 1, 0, "╚", COLOR_BORDER)
-                self._safe_addch_colored(
-                    stdscr, self.height + 1, self.width + 1, "╝", COLOR_BORDER
-                )
-        except Exception as e:
-            logger.error(f"Error drawing borders: {e}", exc_info=True)
+    def _cell_to_px(self, cell: Tuple[int, int]) -> pygame.Rect:
+        x0, y0 = self._playfield_origin()
+        cx, cy = cell
+        return pygame.Rect(
+            x0 + cx * self.cell_size,
+            y0 + cy * self.cell_size,
+            self.cell_size,
+            self.cell_size,
+        )
 
-    def _draw_snake(self, stdscr, snake: List[Tuple[int, int]]):
-        """Draw the snake body"""
-        try:
-            if not snake:
-                return
-
-            # Draw snake body (all segments except head)
-            for x, y in snake[1:]:
-                self._safe_addch_colored(
-                    stdscr, y + BORDER_OFFSET, x + BORDER_OFFSET, "█", COLOR_SNAKE_BODY
-                )
-
-            # Draw snake head (first segment)
-            if snake:
-                head_x, head_y = snake[0]
-                self._safe_addch_colored(
-                    stdscr,
-                    head_y + BORDER_OFFSET,
-                    head_x + BORDER_OFFSET,
-                    "●",
-                    COLOR_SNAKE_HEAD,
-                )
-        except Exception as e:
-            logger.error(f"Error drawing snake: {e}", exc_info=True)
-
-    def _draw_food(self, stdscr, food: Tuple[int, int]):
-        """Draw the food"""
-        try:
-            food_x, food_y = food
-            self._safe_addch_colored(
-                stdscr, food_y + BORDER_OFFSET, food_x + BORDER_OFFSET, "🍎", COLOR_FOOD
+    # ---------------------------------------------------------------------
+    # Public API
+    # ---------------------------------------------------------------------
+    def draw_game(self, game_state) -> None:
+        """Draw the complete game state to the window."""
+        if self.screen is None:
+            raise RuntimeError(
+                "Renderer window not initialized. Call init_window() first."
             )
-        except Exception as e:
-            logger.error(f"Error drawing food: {e}", exc_info=True)
 
-    def _draw_score(self, stdscr, score: int):
-        """Draw the score"""
-        try:
-            score_text = f"Score: {score}"
-            self._safe_addstr_colored(
-                stdscr, 0, self.width + SCORE_PANEL_OFFSET, score_text, COLOR_SCORE
+        # Background
+        self.screen.fill(COLOR_BACKGROUND)
+
+        # Border
+        pygame.draw.rect(
+            self.screen,
+            COLOR_BORDER,
+            self._playfield_rect(),
+            width=self.border_thickness,
+        )
+
+        # Snake
+        self._draw_snake(game_state.snake)
+
+        # Food
+        self._draw_food(game_state.food)
+
+        # HUD (score and blockchain status)
+        self._draw_hud(game_state.score, game_state.blockchain_enabled)
+
+        # Game Over overlay
+        if game_state.game_over:
+            self._draw_game_over_overlay()
+
+        pygame.display.flip()
+
+    # ------------------------------------------------------------------
+    def _draw_snake(self, snake: List[Tuple[int, int]]):
+        """Draw the snake (body segments then head)."""
+        if not snake:
+            return
+
+        # Body segments (skip head at index 0)
+        for segment in snake[1:]:
+            pygame.draw.rect(
+                self.screen,
+                COLOR_SNAKE_BODY,
+                self._cell_to_px(segment),
             )
-        except Exception as e:
-            logger.error(f"Error drawing score: {e}", exc_info=True)
 
-    def _draw_blockchain_status(self, stdscr, blockchain_enabled: bool):
-        """Draw blockchain connection status"""
-        try:
-            status = "🌐 Connected" if blockchain_enabled else "📴 Offline"
-            self._safe_addstr_colored(
-                stdscr,
-                STATUS_PANEL_Y,
-                self.width + SCORE_PANEL_OFFSET,
-                status,
-                COLOR_SCORE,
-            )
-        except Exception as e:
-            logger.error(f"Error drawing blockchain status: {e}", exc_info=True)
+        # Head (first segment)
+        pygame.draw.rect(
+            self.screen,
+            COLOR_SNAKE_HEAD,
+            self._cell_to_px(snake[0]),
+        )
 
-    def _draw_game_over(self, stdscr, game_over: bool, height: int):
-        """Draw game over message if applicable"""
-        try:
-            if not game_over:
-                return
+    def _draw_food(self, food: Tuple[int, int]):
+        fx, fy = food
+        rect = self._cell_to_px((fx, fy))
+        pygame.draw.rect(self.screen, COLOR_FOOD, rect)
 
-            # Create a more visually appealing game over screen
-            messages = [
-                "╔══════════════════════════════════════════════╗",
-                "║                 GAME OVER!                   ║",
-                "║                                              ║",
-                "║        Press 'R' to Restart                  ║",
-                "║        Press 'Q' to Quit                     ║",
-                "╚══════════════════════════════════════════════╝",
-            ]
+    def _draw_hud(self, score: int, blockchain_enabled: bool):
+        hud_text = f"Score: {score}    " + (
+            "Connected" if blockchain_enabled else "Offline"
+        )
+        text_surf = self.font_small.render(hud_text, True, COLOR_SCORE)
+        # Position at top-left inside padding
+        self.screen.blit(text_surf, (self.padding, self.padding))
 
-            start_y = max(0, (height // 2) - 3)
-            for i, msg in enumerate(messages):
-                y_pos = start_y + i
-                x_pos = max(0, (self.width - len(msg)) // 2 + BORDER_OFFSET)
-                self._safe_addstr_colored(stdscr, y_pos, x_pos, msg, COLOR_GAME_OVER)
+    def _draw_game_over_overlay(self):
+        # Centered panel
+        panel_w = int(self.width * self.cell_size * 0.9)
+        panel_h = 140
+        x0, y0 = self._playfield_origin()
+        cx = x0 + (self.width * self.cell_size - panel_w) // 2
+        cy = y0 + (self.height * self.cell_size - panel_h) // 2
+        panel_rect = pygame.Rect(cx, cy, panel_w, panel_h)
 
-        except Exception as e:
-            logger.error(f"Error drawing game over: {e}", exc_info=True)
+        pygame.draw.rect(self.screen, COLOR_GAME_OVER_BG, panel_rect)
+        pygame.draw.rect(self.screen, COLOR_GAME_OVER_TEXT, panel_rect, width=3)
+
+        title = self.font_large.render("GAME OVER!", True, COLOR_GAME_OVER_TEXT)
+        line1 = self.font_small.render(
+            "Press 'R' to Restart", True, COLOR_GAME_OVER_TEXT
+        )
+        line2 = self.font_small.render("Press 'Q' to Quit", True, COLOR_GAME_OVER_TEXT)
+
+        # Center text within panel
+        self.screen.blit(
+            title, (panel_rect.centerx - title.get_width() // 2, panel_rect.y + 18)
+        )
+        self.screen.blit(
+            line1, (panel_rect.centerx - line1.get_width() // 2, panel_rect.y + 60)
+        )
+        self.screen.blit(
+            line2, (panel_rect.centerx - line2.get_width() // 2, panel_rect.y + 90)
+        )

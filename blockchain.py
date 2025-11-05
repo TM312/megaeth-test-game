@@ -58,11 +58,24 @@ class BlockchainClient:
             return False, None
 
         try:
-            transaction = self._build_transaction(key_code, direction)
-            signed_transaction = self._sign_transaction(transaction)
-            tx_hash = self._send_transaction(signed_transaction)
+            nonce = self.w3.eth.get_transaction_count(self.account.address)
+            tx = {
+                "from": self.account.address,
+                "nonce": nonce,
+                "to": self.account.address,  # Sending to self
+                "value": self.w3.to_wei(0, "ether"),
+                "gasPrice": self.w3.eth.gas_price,
+                "data": f"key:{key_code},dir:{direction}".encode("utf-8").hex(),
+            }
 
-            self._log_transaction(tx_hash)
+            # Estimate gas and add it to the transaction
+            tx["gas"] = self.w3.eth.estimate_gas(tx)
+
+            # Sign and send
+            signed_tx = self.w3.eth.account.sign_transaction(tx, self.private_key)
+            tx_hash = self.w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+
+            print(f"Transaction sent: {tx_hash.hex()}")
             return True, tx_hash
 
         except Exception as e:
@@ -90,7 +103,7 @@ class BlockchainClient:
 
     def _send_transaction(self, signed_transaction):
         """Send the signed transaction to the network"""
-        return self.w3.eth.send_raw_transaction(signed_transaction.rawTransaction)
+        return self.w3.eth.send_raw_transaction(signed_transaction.raw_transaction)
 
     def _log_transaction(self, tx_hash):
         """Log transaction hash in debug mode"""

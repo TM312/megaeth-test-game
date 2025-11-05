@@ -69,7 +69,7 @@ class SnakeGame:
 
     def _check_self_collision(self, position: Tuple[int, int]) -> bool:
         """Check if position collides with snake body"""
-        return position in self.snake
+        return position in self.snake[1:]
 
     def process_input(self, key: int) -> bool:
         """

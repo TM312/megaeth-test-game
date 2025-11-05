@@ -2,7 +2,6 @@
 Input handling system for the Snake game
 """
 
-import curses
 import threading
 from typing import Optional, Tuple
 
